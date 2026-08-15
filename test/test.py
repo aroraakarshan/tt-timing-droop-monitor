@@ -2,26 +2,14 @@
 # SPDX-License-Identifier: Apache-2.0
 
 import cocotb
+import sys
+from pathlib import Path
+
 from cocotb.clock import Clock
 from cocotb.triggers import ClockCycles, ReadOnly, RisingEdge, Timer
 
-
-def lfsr16_next(value: int) -> int:
-    feedback = ((value >> 15) ^ (value >> 13) ^ (value >> 12) ^ (value >> 10)) & 1
-    return ((value << 1) & 0xFFFF) | feedback
-
-
-def canary_round(value: int) -> int:
-    value = (value + 0x6D2B) & 0xFFFF
-    rotate_5 = ((value << 5) | (value >> 11)) & 0xFFFF
-    rotate_13 = ((value << 13) | (value >> 3)) & 0xFFFF
-    return rotate_5 ^ rotate_13 ^ 0xA7C5
-
-
-def selected_canary(value: int, depth: int) -> int:
-    for _ in range(depth + 1):
-        value = canary_round(value)
-    return value
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+from timing_model import expected_signature
 
 
 async def reset(dut, controls: int = 0) -> None:
@@ -34,21 +22,12 @@ async def reset(dut, controls: int = 0) -> None:
     dut.rst_n.value = 1
 
 
-def expected_signature(cycles: int, depth: int) -> int:
-    source = 0x1ACE
-    capture = 0
-    signature = 0
-
-    for _ in range(cycles):
-        old_capture = capture
-        capture = selected_canary(source, depth)
-        source = lfsr16_next(source)
-        signature = (
-            ((signature << 1) & 0xFF)
-            | ((signature >> 7) & 1)
-        ) ^ (old_capture & 0xFF) ^ (old_capture >> 8)
-
-    return signature
+async def start_run(dut, controls: int) -> None:
+    dut.ui_in.value = controls & 0x7F
+    await ClockCycles(dut.clk, 2)
+    dut.ui_in.value = controls | 0x80
+    await ClockCycles(dut.clk, 1)
+    dut.ui_in.value = controls & 0x7F
 
 
 @cocotb.test()
@@ -58,21 +37,20 @@ async def test_canary_depths_and_signature(dut):
     for depth in range(4):
         controls = depth << 5
         await reset(dut, controls)
-        await ClockCycles(dut.clk, 24)
+        await start_run(dut, controls)
+        await ClockCycles(dut.clk, 256)
         await Timer(1, unit="ns")
-        assert dut.uo_out.value.to_unsigned() == expected_signature(24, depth)
-        assert (dut.uio_out.value.to_unsigned() & 0x0F) == 8
+        assert dut.uo_out.value.to_unsigned() == expected_signature(depth)
+        assert dut.uio_out.value.to_unsigned() & 1 == 1
 
 
 @cocotb.test()
-async def test_freeze_holds_experiment_state(dut):
+async def test_completed_run_holds_experiment_state(dut):
     cocotb.start_soon(Clock(dut.clk, 10, unit="us").start())
 
     await reset(dut, controls=0x0F)
-    await ClockCycles(dut.clk, 12)
-    await Timer(1, unit="ns")
-    dut.ui_in.value = 0x8F
-    await ClockCycles(dut.clk, 2)
+    await start_run(dut, controls=0x0F)
+    await ClockCycles(dut.clk, 256)
     await Timer(1, unit="ns")
 
     frozen_signature = dut.uo_out.value.to_unsigned()
@@ -89,6 +67,7 @@ async def test_staggered_load_updates_one_selected_bank_per_cycle(dut):
     cocotb.start_soon(Clock(dut.clk, 10, unit="us").start())
 
     await reset(dut, controls=0x1F)
+    await start_run(dut, controls=0x1F)
     previous_parity = (dut.uio_out.value.to_unsigned() >> 4) & 0x0F
 
     for cycle in range(8):
@@ -97,4 +76,21 @@ async def test_staggered_load_updates_one_selected_bank_per_cycle(dut):
         parity = (dut.uio_out.value.to_unsigned() >> 4) & 0x0F
         changed = parity ^ previous_parity
         assert changed & ~(1 << (cycle % 4)) == 0
+        previous_parity = parity
+
+
+@cocotb.test()
+async def test_simultaneous_loads_only_update_on_burst_cycle(dut):
+    cocotb.start_soon(Clock(dut.clk, 10, unit="us").start())
+
+    await reset(dut, controls=0x0F)
+    await start_run(dut, controls=0x0F)
+    previous_parity = (dut.uio_out.value.to_unsigned() >> 4) & 0x0F
+
+    for cycle in range(8):
+        await RisingEdge(dut.clk)
+        await ReadOnly()
+        parity = (dut.uio_out.value.to_unsigned() >> 4) & 0x0F
+        if cycle % 4:
+            assert parity == previous_parity
         previous_parity = parity

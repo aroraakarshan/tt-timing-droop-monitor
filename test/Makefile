@@ -7,6 +7,8 @@ FST ?= -fst # Use more efficient FST format
 TOPLEVEL_LANG ?= verilog
 SRC_DIR = $(PWD)/../src
 PROJECT_SOURCES = project.v
+PYTHONPATH := $(PWD)/../tools:$(PYTHONPATH)
+export PYTHONPATH
 
 ifneq ($(GATES),yes)
 

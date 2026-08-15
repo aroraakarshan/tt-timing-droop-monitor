@@ -30,7 +30,7 @@ pinout:
   ui[4]: "staggered_mode"
   ui[5]: "canary_depth_0"
   ui[6]: "canary_depth_1"
-  ui[7]: "freeze"
+  ui[7]: "start"
 
   # Outputs
   uo[0]: "signature_0"
@@ -43,10 +43,10 @@ pinout:
   uo[7]: "signature_7"
 
   # Bidirectional pins
-  uio[0]: "cycle_count_0"
-  uio[1]: "cycle_count_1"
-  uio[2]: "cycle_count_2"
-  uio[3]: "cycle_count_3"
+  uio[0]: "done"
+  uio[1]: "cycle_count_0"
+  uio[2]: "cycle_count_1"
+  uio[3]: "cycle_count_2"
   uio[4]: "load_parity_0"
   uio[5]: "load_parity_1"
   uio[6]: "load_parity_2"

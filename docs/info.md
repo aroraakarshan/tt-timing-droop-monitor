@@ -41,7 +41,8 @@ outputs: `uio_out[0]` is `done`, `uio_out[3:1]` exposes cycle-count bits, and
 7. Compare the maximum stable frequency with loads disabled, enabled
    simultaneously, and staggered.
 
-The design is closed at a nominal 33.3 MHz. Characterization intentionally
+The design is closed at a conservative 18 MHz across signoff corners.
+Characterization intentionally
 sweeps above that value to locate each canary's failure boundary; operation
 above the declared clock is experimental rather than guaranteed.
 

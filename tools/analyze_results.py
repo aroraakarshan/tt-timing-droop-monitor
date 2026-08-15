@@ -9,7 +9,7 @@ def load_results(path):
     grouped = defaultdict(lambda: defaultdict(list))
     with open(path, newline="", encoding="utf-8") as results_file:
         for row in csv.DictReader(results_file):
-            key = (row["scenario"], int(row["depth_rounds"]))
+            key = (row["scenario"], int(row["canary_stages"]))
             grouped[key][int(row["frequency_hz"])].append(int(row["passed"]))
     return grouped
 
@@ -31,9 +31,9 @@ def main():
     args = parser.parse_args()
 
     grouped = load_results(args.results_csv)
-    print("scenario,depth_rounds,max_all_pass_hz,degradation_percent")
+    print("scenario,canary_stages,max_all_pass_hz,degradation_percent")
 
-    for depth in range(3, 7):
+    for depth in (480, 600, 720, 840):
         baseline = maximum_all_pass_frequency(
             grouped.get(("baseline", depth), {})
         )

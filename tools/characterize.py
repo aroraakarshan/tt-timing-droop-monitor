@@ -67,7 +67,7 @@ def main():
     tt.reset_project(False)
 
     print(
-        "scenario,depth_rounds,load_mask,staggered,"
+        "scenario,canary_stages,load_mask,staggered,"
         "frequency_hz,repeat,signature,expected,passed"
     )
 
@@ -84,7 +84,7 @@ def main():
                     print(
                         "{},{},{},{},{},{},{},{},{}".format(
                             scenario,
-                            depth_select + 3,
+                            (480, 600, 720, 840)[depth_select],
                             load_mask,
                             staggered,
                             frequency_hz,

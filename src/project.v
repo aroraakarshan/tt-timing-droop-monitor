@@ -17,7 +17,7 @@ module tt_um_aroraakarshan_timing_droop_monitor (
 );
 
   reg [15:0] source_state;
-  reg [15:0] canary_capture;
+  reg canary_capture;
   reg [7:0] signature;
   reg [7:0] cycle_count;
   reg running;
@@ -41,31 +41,32 @@ module tt_um_aroraakarshan_timing_droop_monitor (
     end
   endfunction
 
-  function [15:0] canary_round;
-    input [15:0] value;
-    reg [15:0] sum;
-    begin
-      sum = value + 16'h6D2B;
-      canary_round = {sum[10:0], sum[15:11]} ^ {sum[2:0], sum[15:3]} ^ 16'hA7C5;
+`ifdef RTL_SIM
+  wire selected_canary = source_state[0];
+`else
+  (* keep *) wire [840:0] canary_chain;
+  assign canary_chain[0] = source_state[0];
+
+  genvar canary_stage;
+  generate
+    for (canary_stage = 0; canary_stage < 840; canary_stage = canary_stage + 1) begin : generate_canary
+      (* keep *) sky130_fd_sc_hd__inv_1 canary_inverter (
+        .A(canary_chain[canary_stage]),
+        .Y(canary_chain[canary_stage + 1])
+      );
     end
-  endfunction
+  endgenerate
 
-  wire [15:0] canary_1 = canary_round(source_state);
-  wire [15:0] canary_2 = canary_round(canary_1);
-  wire [15:0] canary_3 = canary_round(canary_2);
-  wire [15:0] canary_4 = canary_round(canary_3);
-  wire [15:0] canary_5 = canary_round(canary_4);
-  wire [15:0] canary_6 = canary_round(canary_5);
-
-  reg [15:0] selected_canary;
+  reg selected_canary;
   always @(*) begin
     case (canary_depth)
-      2'd0: selected_canary = canary_3;
-      2'd1: selected_canary = canary_4;
-      2'd2: selected_canary = canary_5;
-      default: selected_canary = canary_6;
+      2'd0: selected_canary = canary_chain[480];
+      2'd1: selected_canary = canary_chain[600];
+      2'd2: selected_canary = canary_chain[720];
+      default: selected_canary = canary_chain[840];
     endcase
   end
+`endif
 
   wire [3:0] stagger_select = 4'b0001 << cycle_count[1:0];
   wire burst_cycle = cycle_count[1:0] == 2'b00;
@@ -82,7 +83,7 @@ module tt_um_aroraakarshan_timing_droop_monitor (
   always @(posedge clk) begin
     if (!rst_n) begin
       source_state  <= 16'h1ACE;
-      canary_capture <= 16'h0000;
+      canary_capture <= 1'b0;
       signature     <= 8'h00;
       cycle_count   <= 8'h00;
       running       <= 1'b0;
@@ -97,7 +98,7 @@ module tt_um_aroraakarshan_timing_droop_monitor (
 
       if (start && !start_delayed && !running) begin
         source_state   <= 16'h1ACE;
-        canary_capture <= 16'h0000;
+        canary_capture <= 1'b0;
         signature      <= 8'h00;
         cycle_count    <= 8'h00;
         running        <= 1'b1;
@@ -109,9 +110,10 @@ module tt_um_aroraakarshan_timing_droop_monitor (
       end else if (running) begin
       source_state   <= lfsr16_next(source_state);
       canary_capture <= selected_canary;
-      signature      <= {signature[6:0], signature[7] ^ signature[5]} ^
-                        canary_capture[7:0] ^
-                        {canary_capture[11:8], canary_capture[15:12]};
+      signature      <= {
+        signature[6:0],
+        signature[7] ^ signature[5] ^ canary_capture
+      };
       cycle_count    <= cycle_count + 1'b1;
 
       if (active_loads[0])

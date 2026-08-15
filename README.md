@@ -7,7 +7,7 @@ The design combines:
 
 - four independently enabled 16-bit switching-load banks;
 - equal-average-activity simultaneous-burst and staggered modes;
-- four selectable combinational canary depths spanning three to six rounds;
+- an explicit 840-stage standard-cell canary with four selectable taps;
 - an exact hardware-controlled 256-cycle measurement window;
 - a deterministic signature for host-side pass/fail comparison; and
 - observable load parity and cycle-count status.
